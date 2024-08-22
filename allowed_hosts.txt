@@ -1,0 +1,5 @@
+*.hh.ru
+hh.ru
+*.habr.com
+habr.com
+t.me
