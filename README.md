@@ -45,12 +45,25 @@ For a description of the Bot API, see this page: https://core.telegram.org/bots/
 ### Запуск
 
 ```bash
+git clone https://github.com/s3rgeym/feedback-tgbot/
+cd feedback-tgbot
+```
+
+Создади `.env` файл:
+
+```bash
 cp .env{.example,}
+```
+
+Пропишите в `.env` данные от бота и id своего аккаунта:
+
+```bash
+nano .env
 ```
 
 Свой айди можно узнать, например, через [@myidbot](https://t.me/myidbot).
 
-Пропишите в `.env` данные от бота и id своего аккаунта, а затем запустите:
+Проще всего бота запустить через dockr-compose:
 
 ```bash
 docker compose up -d
