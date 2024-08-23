@@ -77,10 +77,11 @@ def check_links(text: str, allowed_hosts: list[str]) -> bool:
     """Проверяет, содержит ли сообщение недопустимые ссылки."""
     links = re.findall(r"(https?://\S+)", text)
     for link in links:
-        sp = urlsplit(link)
-        for pat in allowed_hosts:
-            if not fnmatch.fnmatch(sp.hostname, pat):
-                return False
+        if not any(
+            fnmatch.fnmatch(urlsplit(link).hostname, pat)
+            for pat in allowed_hosts
+        ):
+            return False
     return True
 
 
