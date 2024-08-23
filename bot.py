@@ -217,14 +217,14 @@ async def start(message: Message) -> None:
 @dp.message(lambda message: message.from_user.id != args.owner_id)
 async def handle_user_message(message: Message) -> None:
     """Обрабатывает текстовые сообщения и вложения от пользователей."""
-    logger.debug(f"message from user #{message.from_user.id}")
+    logger.debug(f"Incoming message from user #{message.from_user.id}")
     user_id = message.from_user.id
 
     if await check_user_banned(user_id):
-        await bot.send_message(
-            user_id,
-            "🚫 Сообщение не было отправлено, так как вы заблокированы.",
-        )
+        # await bot.send_message(
+        #     user_id,
+        #     "🚫 Сообщение не было отправлено, так как вы заблокированы.",
+        # )
         return
 
     # if message.text and not check_links(message.text, read_allowed_hosts()):
@@ -284,7 +284,7 @@ async def handle_owner_message(message: Message) -> None:
         sender_id = await get_last_message_sender()
 
     if sender_id:
-        logger.debug(f"reply to sender: {sender_id}")
+        logger.debug(f"Send reply to sender #{sender_id}")
 
         await bot.copy_message(
             sender_id,
@@ -304,10 +304,15 @@ async def block_user(callback: CallbackQuery) -> None:
     if user_id:
         # Блокируем пользователя
         connection: aiosqlite.Connection = db_connection_ctx.get()
-        await connection.execute(
+        res = await connection.execute_insert(
             "INSERT INTO banned_users (user_id) VALUES (?) ON CONFLICT DO NOTHING",
             (user_id,),
         )
+        
+        if not res:
+            logger.warning(f"Failed to ban user #{user_id}")
+            return
+        
         await connection.commit()
 
         # Получаем информацию о пользователе
