@@ -254,7 +254,7 @@ async def handle_user_message(message: Message) -> None:
 
 
 @dp.message(lambda message: message.from_user.id == args.owner_id)
-async def handle_owner_reply(message: Message) -> None:
+async def handle_owner_message(message: Message) -> None:
     """Обрабатывает сообщения от владельца и пересылает их соответствующим пользователям."""
 
     sender_id = None
