@@ -1,6 +1,6 @@
 ## Feedback Telegram Bot
 
-Бот для обратной связи.
+Бот для обратной связи, позвлояющий общаться, не паля свой реальный аккаунт.
 
 Демо: https://t.me/feedback_s3rgeym_bot
 
@@ -22,12 +22,6 @@ Alright, a new bot. How are we going to call it? Please choose a name for your b
 
 BotFather, [8/22/24 11:50 PM]
 Good. Now let's choose a username for your bot. It must end in `bot`. Like this, for example: TetrisBot or tetris_bot.
-
-<censored>, [8/22/24 11:52 PM]
-feedback_s3rgeym_bot
-
-BotFather, [8/22/24 11:52 PM]
-Sorry, the username must end in 'bot'. E.g. 'Tetris_bot' or 'Tetrisbot'
 
 <censored>, [8/22/24 11:52 PM]
 feedback_s3rgeym_bot
