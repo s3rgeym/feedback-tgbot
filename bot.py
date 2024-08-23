@@ -79,7 +79,7 @@ def check_links(text: str, allowed_hosts: list[str]) -> bool:
     for link in links:
         sp = urlsplit(link)
         for pat in allowed_hosts:
-            if fnmatch.fnmatch(sp.hostname, pat):
+            if not fnmatch.fnmatch(sp.hostname, pat):
                 return False
     return True
 
