@@ -236,6 +236,13 @@ async def handle_user_message(message: Message) -> None:
 
     await save_user_info(user_id, full_name, username)
 
+    # Я так и не понял как скопировать сообщение со всеми вложениями, добавив подпись от кого оно
+    await bot.send_message(
+        args.owner_id,
+        f"_Сообщение от {full_name}:_",
+        parse_mode="markdown",
+    )
+
     keyboard = owner_keyboard(user_id)
     result = await bot.copy_message(
         args.owner_id,
@@ -244,12 +251,13 @@ async def handle_user_message(message: Message) -> None:
         reply_markup=keyboard,
     )
     await save_message(result.message_id, user_id)
-    await bot.send_message(
-        args.owner_id,
-        f"_Сообщение от {full_name}_",
-        reply_to_message_id=result.message_id,
-        parse_mode="markdown",
-    )
+    # когда подпись снизу не очень понятно от кого сообщение
+    # await bot.send_message(
+    #     args.owner_id,
+    #     f"_Сообщение от {full_name}_",
+    #     reply_to_message_id=result.message_id,
+    #     parse_mode="markdown",
+    # )
     await message.answer("✅ Ваше сообщение отправлено, ждите ответа.")
 
 
