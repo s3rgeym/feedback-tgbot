@@ -178,7 +178,7 @@ async def get_message_sender(message_id: int) -> int | None:
 
 
 async def get_last_message_sender() -> int | None:
-    """Возвращает ID отправителя по ID сообщения."""
+    """Возвращает ID отправителя последнего сообщения."""
     connection: aiosqlite.Connection = db_connection_ctx.get()
     async with connection.execute(
         "SELECT sender_id FROM message_senders ORDER BY ROWID DESC LIMIT 1"
