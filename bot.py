@@ -221,7 +221,8 @@ async def handle_user_message(message: Message) -> None:
 
     if await check_user_banned(user_id):
         await bot.send_message(
-            user_id, "🚫 Сообщение не было отправлено, так как вы заблокированы."
+            user_id,
+            "🚫 Сообщение не было отправлено, так как вы заблокированы.",
         )
         return
 
@@ -250,6 +251,14 @@ async def handle_user_message(message: Message) -> None:
         message_id=message.message_id,
         reply_markup=keyboard,
     )
+
+    # Можно было бы редактировать скопированные сообщения, добавляя в начало от кого они
+    # await bot.edit_message_text()
+
+    # но в документации сказано, что
+    # >Please note, that it is currently only possible to edit messages without reply_markup or with inline keyboards.
+    # https://core.telegram.org/bots/api#updating-messages
+
     await save_message(result.message_id, user_id)
     # когда подпись снизу не очень понятно от кого сообщение
     # await bot.send_message(
@@ -275,7 +284,7 @@ async def handle_owner_message(message: Message) -> None:
 
     if sender_id:
         logger.debug(f"reply to sender: {sender_id}")
-        
+
         await bot.copy_message(
             sender_id,
             from_chat_id=message.chat.id,
