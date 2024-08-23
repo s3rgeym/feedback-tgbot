@@ -221,7 +221,7 @@ async def handle_user_message(message: Message) -> None:
 
     if await check_user_banned(user_id):
         await bot.send_message(
-            user_id, "🚫 Сообщение не было отправлено так как вы заблокированы."
+            user_id, "🚫 Сообщение не было отправлено, так как вы заблокированы."
         )
         return
 
@@ -239,7 +239,7 @@ async def handle_user_message(message: Message) -> None:
     # Я так и не понял как скопировать сообщение со всеми вложениями, добавив подпись от кого оно
     await bot.send_message(
         args.owner_id,
-        f"_Сообщение от {full_name}:_",
+        f"_Сообщение от {full_name} @{username}:_",
         parse_mode="markdown",
     )
 
@@ -273,9 +273,9 @@ async def handle_owner_message(message: Message) -> None:
     else:
         sender_id = await get_last_message_sender()
 
-    logger.debug(f"reply to sender: {sender_id}")
-
     if sender_id:
+        logger.debug(f"reply to sender: {sender_id}")
+        
         await bot.copy_message(
             sender_id,
             from_chat_id=message.chat.id,
