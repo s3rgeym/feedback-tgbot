@@ -4,6 +4,7 @@ import fnmatch
 import logging
 import os
 import re
+import random
 from contextvars import ContextVar
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -17,7 +18,12 @@ from aiogram.types import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     Message,
+    BotCommand,
 )
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
+from aiogram.exceptions import TelegramForbiddenError, TelegramBadRequest, TelegramAPIError 
+
 from dotenv import load_dotenv
 
 CWD = Path.cwd()
@@ -61,8 +67,11 @@ db_connection_ctx: ContextVar[aiosqlite.Connection | None] = ContextVar(
 bot = Bot(token=args.api_token)
 dp = Dispatcher()
 
+# Определяем состояния для рассылки
+class BroadcastStates(StatesGroup):
+    waiting_for_message = State()
 
-# https://docs.aiogram.dev/en/latest/dispatcher/errors.html
+
 @dp.error()
 async def error_handler(event: ErrorEvent):
     logger.error("Error caused by %s", event.exception, exc_info=True)
@@ -197,6 +206,14 @@ async def get_user_info(user_id: int) -> tuple[str, str] | None:
         return await cursor.fetchone()
 
 
+async def get_all_user_ids() -> list[int]:
+    """Возвращает список всех уникальных ID пользователей, с которыми бот взаимодействовал."""
+    connection: aiosqlite.Connection = db_connection_ctx.get()
+    async with connection.execute("SELECT user_id FROM user_info") as cursor:
+        results = await cursor.fetchall()
+        return [row[0] for row in results]
+
+
 async def check_user_banned(user_id: int) -> bool:
     """Проверяет, заблокирован ли пользователь."""
     connection: aiosqlite.Connection = db_connection_ctx.get()
@@ -221,24 +238,13 @@ async def handle_user_message(message: Message) -> None:
     user_id = message.from_user.id
 
     if await check_user_banned(user_id):
-        # await bot.send_message(
-        #     user_id,
-        #     "🚫 Сообщение не было отправлено, так как вы заблокированы.",
-        # )
         return
-
-    # if message.text and not check_links(message.text, read_allowed_hosts()):
-    #     await bot.send_message(
-    #         user_id, "🚫 Ваше сообщение содержит недопустимые ссылки."
-    #     )
-    #     return
 
     username = message.from_user.username
     full_name = message.from_user.full_name
 
     await save_user_info(user_id, full_name, username)
 
-    # Я так и не понял как скопировать сообщение со всеми вложениями, добавив подпись от кого оно
     await bot.send_message(
         args.owner_id,
         f"_Сообщение от {full_name} @{username}:_",
@@ -253,21 +259,7 @@ async def handle_user_message(message: Message) -> None:
         reply_markup=keyboard,
     )
 
-    # Можно было бы редактировать скопированные сообщения, добавляя в начало от кого они
-    # await bot.edit_message_text()
-
-    # но в документации сказано, что
-    # >Please note, that it is currently only possible to edit messages without reply_markup or with inline keyboards.
-    # https://core.telegram.org/bots/api#updating-messages
-
     await save_message(result.message_id, user_id)
-    # когда подпись снизу не очень понятно от кого сообщение
-    # await bot.send_message(
-    #     args.owner_id,
-    #     f"_Сообщение от {full_name}_",
-    #     reply_to_message_id=result.message_id,
-    #     parse_mode="markdown",
-    # )
     await message.answer("✅ Ваше сообщение отправлено, ждите ответа.")
 
 
@@ -302,7 +294,6 @@ async def block_user(callback: CallbackQuery) -> None:
     """Обрабатывает запрос на блокировку пользователя."""
     user_id = int(callback.data.split("_")[1])
     if user_id:
-        # Блокируем пользователя
         connection: aiosqlite.Connection = db_connection_ctx.get()
         res = await connection.execute_insert(
             "INSERT INTO banned_users (user_id) VALUES (?) ON CONFLICT DO NOTHING",
@@ -315,11 +306,9 @@ async def block_user(callback: CallbackQuery) -> None:
         
         await connection.commit()
 
-        # Получаем информацию о пользователе
         user_info = await get_user_info(user_id)
         full_name, username = user_info if user_info else (None, None)
 
-        # Уведомляем владельца
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
                 [
@@ -335,7 +324,6 @@ async def block_user(callback: CallbackQuery) -> None:
             reply_markup=keyboard,
         )
 
-        # Уведомляем пользователя
         await bot.send_message(user_id, "🚫 Вы были заблокированы.")
     else:
         await callback.message.answer(
@@ -348,7 +336,6 @@ async def unblock_user(callback: CallbackQuery) -> None:
     """Обрабатывает запрос на разблокировку пользователя."""
     user_id = int(callback.data.split("_")[1])
 
-    # Разблокируем пользователя
     connection: aiosqlite.Connection = db_connection_ctx.get()
 
     await connection.execute(
@@ -356,16 +343,13 @@ async def unblock_user(callback: CallbackQuery) -> None:
     )
     await connection.commit()
 
-    # Получаем информацию о пользователе
     user_info = await get_user_info(user_id)
     full_name, username = user_info if user_info else (None, None)
 
-    # Уведомляем владельца
     await callback.message.answer(
         f"✅ Пользователь {full_name} @{username} разблокирован."
     )
 
-    # Уведомляем владельца
     await bot.send_message(
         user_id, "✅ Вы разблокированы и можете писать снова."
     )
@@ -396,10 +380,98 @@ async def whois(callback: CallbackQuery) -> None:
             "❗ Ошибка: не удалось найти отправителя."
         )
 
+@dp.message(Command(commands=["broadcast"]), lambda message: message.from_user.id == args.owner_id)
+async def cmd_broadcast(message: Message, state: FSMContext) -> None:
+    """
+    Обработчик команды /broadcast.
+    Переводит бота в состояние ожидания сообщения для рассылки.
+    """
+    logger.info(f"Owner {message.from_user.id} initiated broadcast.")
+    await message.answer("Отправьте мне сообщение, которое вы хотите разослать всем пользователям. Оно будет отправлено со всеми вложениями. Для отмены используйте /cancel.")
+    await state.set_state(BroadcastStates.waiting_for_message)
+
+
+@dp.message(BroadcastStates.waiting_for_message, lambda message: message.from_user.id == args.owner_id)
+async def process_broadcast_message(message: Message, state: FSMContext) -> None:
+    """
+    Обрабатывает сообщение от владельца в состоянии ожидания рассылки
+    и рассылает его всем пользователям.
+    """
+    logger.info(f"Owner {message.from_user.id} sending broadcast message.")
+    
+    all_user_ids = await get_all_user_ids()
+    users_to_broadcast = all_user_ids 
+
+    await message.answer(
+        f"Начинаю рассылку для **{len(users_to_broadcast)}** пользователей. "
+        f"Между отправками будет пауза от 1.5 до 3.0 секунд." # <--- ОБНОВЛЕННЫЙ ДИАПАЗОН В ТЕКСТЕ
+        f"\n\n_Сообщение будет отправлено._"
+    )
+
+    sent_count = 0
+    blocked_by_bot_count = 0
+    other_errors_count = 0
+
+    for user_id in users_to_broadcast:
+        try:
+            await bot.copy_message(
+                chat_id=user_id,
+                from_chat_id=message.chat.id,
+                message_id=message.message_id,
+            )
+            sent_count += 1
+            logger.info(f"Successfully sent broadcast to user {user_id}")
+            
+            # Генерируем случайную задержку от 1.5 до 3.0 секунд
+            sleep_time = random.uniform(1.5, 3.0) # <--- ОБНОВЛЕННЫЙ ДИАПАЗОН
+            await asyncio.sleep(sleep_time)
+            
+        except TelegramForbiddenError:
+            logger.warning(f"Failed to send broadcast to user {user_id}: Bot was blocked by the user.")
+            blocked_by_bot_count += 1
+        except (TelegramBadRequest, TelegramAPIError) as e:
+            logger.error(f"Failed to send broadcast to user {user_id} due to API error: {e}")
+            other_errors_count += 1
+        except Exception as e:
+            logger.critical(f"Unexpected error when sending broadcast to user {user_id}: {e}", exc_info=True)
+            other_errors_count += 1
+
+    await message.answer(
+        f"Рассылка завершена!\n"
+        f"✅ Отправлено: {sent_count}\n"
+        f"🚫 Пропущено (заблокировали бота): {blocked_by_bot_count}\n"
+        f"❌ Ошибки при отправке (прочие): {other_errors_count}"
+    )
+    await state.clear()
+    logger.info(f"Broadcast finished. Sent: {sent_count}, Blocked by bot: {blocked_by_bot_count}, Other errors: {other_errors_count}")
+
+@dp.message(Command(commands=["cancel"]), BroadcastStates.waiting_for_message, lambda message: message.from_user.id == args.owner_id)
+async def cancel_broadcast(message: Message, state: FSMContext) -> None:
+    """
+    Обработчик команды /cancel во время ожидания сообщения для рассылки.
+    Отменяет процесс рассылки.
+    """
+    await state.clear()
+    await message.answer("Рассылка отменена.")
+    logger.info(f"Owner {message.from_user.id} cancelled broadcast.")
+
+
+async def set_default_commands(bot: Bot):
+    """
+    Устанавливает команды по умолчанию для бота.
+    """
+    commands = [
+        BotCommand(command="start", description="Запустить бота"),
+        BotCommand(command="broadcast", description="Сделать рассылку"),
+    ]
+    await bot.set_my_commands(commands)
+    logger.info("Default commands set.")
+
 
 async def run() -> None:
     """Запускает бота."""
     await init_db()
+    await set_default_commands(bot)
     await dp.start_polling(bot)
 
 
